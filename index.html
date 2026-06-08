@@ -261,6 +261,55 @@
     font-size: 12px;
   }
   .module-toggle input { width: 16px; height: 16px; }
+  .ops-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0 10px;
+  }
+  .ops-tab {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--soft);
+    min-height: 34px;
+    padding: 0 11px;
+    font-size: 11px;
+  }
+  .ops-tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .ops-section { display: grid; gap: 8px; }
+  .ops-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 10px;
+  }
+  .ops-title { font-weight: 700; font-size: 13px; }
+  .ops-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .progress-track {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(21, 19, 15, 0.08);
+    overflow: hidden;
+    margin-top: 7px;
+  }
+  .progress-fill { height: 100%; background: var(--green); border-radius: inherit; }
+  .mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .mini-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 10px;
+  }
+  .mini-value { font-family: var(--display); font-size: 1.6rem; line-height: 1; }
   .toast {
     position: fixed;
     left: 50%;
@@ -283,7 +332,8 @@
   @media (max-width: 860px) {
     .topbar, .panel-head { flex-direction: column; }
     .actions { justify-content: flex-start; }
-    .stats, .grid, .two, .site-grid, .module-grid { grid-template-columns: 1fr; }
+    .stats, .grid, .two, .site-grid, .module-grid, .mini-grid { grid-template-columns: 1fr; }
+    .ops-row { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -389,6 +439,7 @@ let state = {
   clients: [],
   activity: []
 };
+let activeOpsTab = 'team';
 let cloudReady = false;
 let cloudDocRef = null;
 let cloudSaveTimer = null;
@@ -442,6 +493,7 @@ function applyCloudState(data) {
     state = { ...state, ...nextState };
     if (!Array.isArray(state.clients)) state.clients = [];
     if (!Array.isArray(state.activity)) state.activity = [];
+    hydrateAllClients();
     ensureMirraConnected(true);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     document.getElementById('setupFields').style.display = state.setupComplete ? 'none' : 'block';
@@ -510,6 +562,53 @@ function log(text) {
   state.activity = state.activity.slice(0, 30);
 }
 
+function mirraStaffDefaults() {
+  return [
+    { id: uid('emp'), name: 'Анна', role: 'Управляющий', venue: 'MIRRA', status: 'работает', progress: 92, tests: 8, average: 94, weak: 'финансы' },
+    { id: uid('emp'), name: 'Даниил', role: 'Бармен', venue: 'MIRRA', status: 'работает', progress: 78, tests: 6, average: 86, weak: 'винная карта' },
+    { id: uid('emp'), name: 'Мария', role: 'Официант', venue: 'MIRRA', status: 'стажировка', progress: 54, tests: 3, average: 74, weak: 'кальяны' }
+  ];
+}
+
+function mirraMenuDefaults() {
+  return [
+    { id: uid('menu'), name: 'ACID RED', category: 'Бар', price: 750, status: 'активно', updatedAt: today(), training: true },
+    { id: uid('menu'), name: 'Брускетта лосось', category: 'Кухня', price: 880, status: 'активно', updatedAt: today(), training: true },
+    { id: uid('menu'), name: 'Да Хун Пао Premium', category: 'Чай', price: 850, status: 'активно', updatedAt: today(), training: false }
+  ];
+}
+
+function clientOpsDefaults() {
+  return {
+    staff: [],
+    menu: [],
+    trainingPlan: [
+      { id: uid('learn'), title: 'Стандарты сервиса', progress: 82, weak: 'работа с жалобами' },
+      { id: uid('learn'), title: 'Бар и коктейли', progress: 76, weak: 'пейринги' },
+      { id: uid('learn'), title: 'Кухня и составы', progress: 68, weak: 'аллергены' }
+    ],
+    publish: { mode: 'draft', lastPublishedAt: '', lastChange: 'Подключение создано', pendingChanges: 0 }
+  };
+}
+
+function hydrateClientOps(client) {
+  const defaults = clientOpsDefaults();
+  if (!client.ops || typeof client.ops !== 'object') client.ops = defaults;
+  client.ops.staff = Array.isArray(client.ops.staff) ? client.ops.staff : [];
+  client.ops.menu = Array.isArray(client.ops.menu) ? client.ops.menu : [];
+  client.ops.trainingPlan = Array.isArray(client.ops.trainingPlan) ? client.ops.trainingPlan : defaults.trainingPlan;
+  client.ops.publish = { ...defaults.publish, ...(client.ops.publish || {}) };
+  if (client.name.trim().toLowerCase() === 'mirra') {
+    if (!client.ops.staff.length) client.ops.staff = mirraStaffDefaults();
+    if (!client.ops.menu.length) client.ops.menu = mirraMenuDefaults();
+  }
+  return client;
+}
+
+function hydrateAllClients() {
+  state.clients.forEach(hydrateClientOps);
+}
+
 function demoClients() {
   return [
     {
@@ -572,11 +671,11 @@ function demoClients() {
       modules: { content: true, staff: false, tests: false, analytics: false, finance: false, ai: false },
       notes: 'Ожидает подтверждения запуска.'
     }
-  ];
+  ].map(hydrateClientOps);
 }
 
 function mirraClient() {
-  return {
+  return hydrateClientOps({
     id: uid('client'),
     name: 'MIRRA',
     city: 'Рязань',
@@ -595,12 +694,13 @@ function mirraClient() {
     visits: 846,
     modules: { content: true, staff: true, tests: true, analytics: true, finance: true, ai: true },
     notes: 'Подключено к KorRest как первое заведение. MIRRA остается отдельным клиентским проектом, а здесь хранится только карточка управления подключением.'
-  };
+  });
 }
 
 function init() {
   load();
   if (state.setupComplete) {
+    hydrateAllClients();
     ensureMirraConnected(true);
     save();
   }
@@ -708,6 +808,7 @@ function newClient() {
     modules: { content: true, staff: false, tests: false, analytics: false, finance: false, ai: false },
     notes: ''
   };
+  hydrateClientOps(client);
   state.clients.unshift(client);
   state.selectedId = client.id;
   log('Добавлен новый клиент.');
@@ -802,6 +903,102 @@ function syncClientSite(id) {
   client.deployStatus = client.repoUrl ? 'GitHub Pages подключен' : 'репозиторий не указан';
   client.health = client.repoUrl && client.projectUrl ? Math.max(Number(client.health) || 0, 96) : Number(client.health) || 0;
   log('Проверено подключение сайта: ' + client.name + '.');
+  save();
+  render();
+}
+
+function setOpsTab(tab) {
+  activeOpsTab = tab;
+  render();
+}
+
+function addStaffMember(clientId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  if (!client) return;
+  hydrateClientOps(client);
+  const name = prompt('Имя сотрудника');
+  if (!name) return;
+  const role = prompt('Должность', 'Официант') || 'Сотрудник';
+  client.ops.staff.unshift({
+    id: uid('emp'),
+    name: name.trim(),
+    role: role.trim(),
+    venue: client.name,
+    status: 'стажировка',
+    progress: 0,
+    tests: 0,
+    average: 0,
+    weak: 'не определено'
+  });
+  client.users = Math.max(Number(client.users) || 0, client.ops.staff.length);
+  client.ops.publish.pendingChanges += 1;
+  log('Добавлен сотрудник в ' + client.name + ': ' + name.trim() + '.');
+  save();
+  render();
+}
+
+function updateStaffProgress(clientId, staffId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  const staff = client?.ops?.staff?.find((item) => item.id === staffId);
+  if (!staff) return;
+  const value = prompt('Новый прогресс обучения, %', String(staff.progress));
+  if (value === null) return;
+  staff.progress = Math.max(0, Math.min(100, Number(value) || 0));
+  staff.tests += 1;
+  staff.average = Math.max(staff.average || 0, Math.round((staff.average || staff.progress) * 0.65 + staff.progress * 0.35));
+  client.ops.publish.pendingChanges += 1;
+  log('Обновлен прогресс сотрудника: ' + staff.name + '.');
+  save();
+  render();
+}
+
+function addMenuItem(clientId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  if (!client) return;
+  hydrateClientOps(client);
+  const name = prompt('Название позиции меню');
+  if (!name) return;
+  const category = prompt('Категория', 'Кухня') || 'Меню';
+  const price = prompt('Цена', '0') || '0';
+  client.ops.menu.unshift({
+    id: uid('menu'),
+    name: name.trim(),
+    category: category.trim(),
+    price: Math.max(0, Number(String(price).replace(/\D/g, '')) || 0),
+    status: 'активно',
+    updatedAt: today(),
+    training: true
+  });
+  client.ops.publish.pendingChanges += 1;
+  client.ops.publish.lastChange = 'Добавлена позиция меню: ' + name.trim();
+  log('Добавлена позиция меню в ' + client.name + ': ' + name.trim() + '.');
+  save();
+  render();
+}
+
+function toggleMenuStatus(clientId, itemId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  const item = client?.ops?.menu?.find((menuItem) => menuItem.id === itemId);
+  if (!item) return;
+  item.status = item.status === 'активно' ? 'скрыто' : 'активно';
+  item.updatedAt = today();
+  client.ops.publish.pendingChanges += 1;
+  client.ops.publish.lastChange = 'Изменен статус меню: ' + item.name;
+  log('Изменен статус позиции: ' + item.name + '.');
+  save();
+  render();
+}
+
+function publishClientChanges(clientId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  if (!client) return;
+  hydrateClientOps(client);
+  client.ops.publish.mode = 'published';
+  client.ops.publish.lastPublishedAt = new Date().toISOString();
+  client.ops.publish.lastChange = 'Опубликованы изменения';
+  client.ops.publish.pendingChanges = 0;
+  client.lastCheckAt = today();
+  log('Опубликованы изменения для ' + client.name + '.');
   save();
   render();
 }
@@ -1007,11 +1204,126 @@ function siteControlHtml(client) {
           `).join('')}
         </div>
       </div>
+      ${opsConsoleHtml(client)}
+    </div>
+  `;
+}
+
+function opsConsoleHtml(client) {
+  hydrateClientOps(client);
+  const tabs = [
+    ['team', 'Команда'],
+    ['training', 'Обучение'],
+    ['menu', 'Меню'],
+    ['publish', 'Публикация']
+  ];
+  return `
+    <div class="ops-tabs">
+      ${tabs.map(([key, label]) => `<button class="ops-tab ${activeOpsTab === key ? 'active' : ''}" type="button" onclick="setOpsTab('${key}')">${label}</button>`).join('')}
+    </div>
+    ${activeOpsTab === 'team' ? teamOpsHtml(client) : ''}
+    ${activeOpsTab === 'training' ? trainingOpsHtml(client) : ''}
+    ${activeOpsTab === 'menu' ? menuOpsHtml(client) : ''}
+    ${activeOpsTab === 'publish' ? publishOpsHtml(client) : ''}
+  `;
+}
+
+function teamOpsHtml(client) {
+  const staff = client.ops.staff || [];
+  const avg = staff.length ? Math.round(staff.reduce((sum, item) => sum + (Number(item.progress) || 0), 0) / staff.length) : 0;
+  return `
+    <div class="ops-section">
+      <div class="mini-grid">
+        <div class="mini-card"><div class="stat-label">Сотрудников</div><div class="mini-value">${staff.length}</div></div>
+        <div class="mini-card"><div class="stat-label">Средний прогресс</div><div class="mini-value">${avg}%</div></div>
+        <div class="mini-card"><div class="stat-label">Стажировка</div><div class="mini-value">${staff.filter((item) => item.status === 'стажировка').length}</div></div>
+      </div>
+      <button class="btn primary" type="button" onclick="addStaffMember('${client.id}')">Добавить сотрудника</button>
+      ${staff.map((item) => `
+        <div class="ops-row">
+          <div>
+            <div class="ops-title">${escapeHtml(item.name)} · ${escapeHtml(item.role)}</div>
+            <div class="ops-meta">${escapeHtml(item.status)} · тестов ${item.tests || 0} · слабая тема: ${escapeHtml(item.weak || 'не определено')}</div>
+            <div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, Number(item.progress) || 0))}%"></div></div>
+          </div>
+          <button class="btn" type="button" onclick="updateStaffProgress('${client.id}', '${item.id}')">${item.progress || 0}%</button>
+        </div>
+      `).join('') || '<div class="empty">Сотрудники еще не добавлены.</div>'}
+    </div>
+  `;
+}
+
+function trainingOpsHtml(client) {
+  const plan = client.ops.trainingPlan || [];
+  const staff = client.ops.staff || [];
+  const weakPeople = staff.slice().sort((a, b) => (a.progress || 0) - (b.progress || 0)).slice(0, 3);
+  return `
+    <div class="ops-section">
+      <div class="mini-grid">
+        <div class="mini-card"><div class="stat-label">Средний балл</div><div class="mini-value">${staff.length ? Math.round(staff.reduce((sum, item) => sum + (item.average || 0), 0) / staff.length) : 0}</div></div>
+        <div class="mini-card"><div class="stat-label">В риске</div><div class="mini-value">${staff.filter((item) => (item.progress || 0) < 60).length}</div></div>
+        <div class="mini-card"><div class="stat-label">Разделов</div><div class="mini-value">${plan.length}</div></div>
+      </div>
+      ${plan.map((item) => `
+        <div class="ops-row">
+          <div>
+            <div class="ops-title">${escapeHtml(item.title)}</div>
+            <div class="ops-meta">слабое место: ${escapeHtml(item.weak)}</div>
+            <div class="progress-track"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, Number(item.progress) || 0))}%"></div></div>
+          </div>
+          <div class="health">${item.progress}%</div>
+        </div>
+      `).join('')}
+      <div class="empty">Фокус недели: ${weakPeople.map((item) => `${escapeHtml(item.name)} (${item.progress || 0}%)`).join(', ') || 'нет данных'}</div>
+    </div>
+  `;
+}
+
+function menuOpsHtml(client) {
+  const items = client.ops.menu || [];
+  return `
+    <div class="ops-section">
+      <div class="mini-grid">
+        <div class="mini-card"><div class="stat-label">Позиций</div><div class="mini-value">${items.length}</div></div>
+        <div class="mini-card"><div class="stat-label">Активно</div><div class="mini-value">${items.filter((item) => item.status === 'активно').length}</div></div>
+        <div class="mini-card"><div class="stat-label">В обучении</div><div class="mini-value">${items.filter((item) => item.training).length}</div></div>
+      </div>
+      <button class="btn primary" type="button" onclick="addMenuItem('${client.id}')">Добавить позицию</button>
+      ${items.map((item) => `
+        <div class="ops-row">
+          <div>
+            <div class="ops-title">${escapeHtml(item.name)} · ${item.price || 0} ₽</div>
+            <div class="ops-meta">${escapeHtml(item.category)} · ${escapeHtml(item.status)} · обновлено ${escapeHtml(item.updatedAt || '—')}</div>
+          </div>
+          <button class="btn" type="button" onclick="toggleMenuStatus('${client.id}', '${item.id}')">${item.status === 'активно' ? 'Скрыть' : 'Включить'}</button>
+        </div>
+      `).join('') || '<div class="empty">Меню еще не добавлено.</div>'}
+    </div>
+  `;
+}
+
+function publishOpsHtml(client) {
+  const publish = client.ops.publish || {};
+  return `
+    <div class="ops-section">
+      <div class="mini-grid">
+        <div class="mini-card"><div class="stat-label">Черновик</div><div class="mini-value">${publish.pendingChanges || 0}</div><div class="muted">изменений</div></div>
+        <div class="mini-card"><div class="stat-label">Режим</div><div class="mini-value" style="font-size:1.2rem">${escapeHtml(publish.mode || 'draft')}</div></div>
+        <div class="mini-card"><div class="stat-label">Публикация</div><div class="mini-value" style="font-size:1.2rem">${publish.lastPublishedAt ? new Date(publish.lastPublishedAt).toLocaleDateString('ru-RU') : '—'}</div></div>
+      </div>
+      <div class="ops-row">
+        <div>
+          <div class="ops-title">${escapeHtml(publish.lastChange || 'Изменений пока нет')}</div>
+          <div class="ops-meta">Пока это управляет состоянием KorRest; следующий шаг — связать публикацию с репозиторием MIRRA.</div>
+        </div>
+        <button class="btn primary" type="button" onclick="publishClientChanges('${client.id}')">Опубликовать</button>
+      </div>
     </div>
   `;
 }
 
 function render() {
+  hydrateAllClients();
   document.getElementById('ownerSub').textContent = (state.ownerName || 'Владелец') + ', здесь ваши клиенты, подключения и общий контроль проектов.';
   document.getElementById('stats').innerHTML = statsHtml();
   document.getElementById('clientList').innerHTML = listHtml();
