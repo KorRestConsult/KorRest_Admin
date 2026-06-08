@@ -65,6 +65,21 @@
     letter-spacing: 0;
   }
   .subtitle { max-width: 670px; margin-top: 10px; color: var(--soft); font-size: 13px; }
+  .cloud-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--muted);
+    min-height: 28px;
+    padding: 0 10px;
+    margin-top: 10px;
+    font-size: 11px;
+  }
+  .cloud-status.online { color: var(--green); border-color: rgba(63, 123, 82, 0.28); }
+  .cloud-status.offline { color: var(--red); border-color: rgba(157, 47, 47, 0.24); }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
   .btn {
     min-height: 42px;
@@ -255,6 +270,7 @@
     <div class="eyebrow">owner console</div>
     <h1>KorRest</h1>
     <p class="subtitle">Личный кабинет для управления клиентами, подключенными заведениями и запуском новых проектов.</p>
+    <div id="loginCloudStatus" class="cloud-status">облако: подключение</div>
     <div class="form" style="margin-top:16px">
       <div id="setupFields">
         <div class="field">
@@ -280,6 +296,7 @@
         <div class="eyebrow">частный кабинет</div>
         <h1>KorRest</h1>
         <p id="ownerSub" class="subtitle">Управление клиентами, подключениями и запуском новых заведений.</p>
+        <div id="appCloudStatus" class="cloud-status">облако: подключение</div>
       </div>
       <div class="actions">
         <button class="btn" type="button" onclick="connectMirra()">Подключить MIRRA</button>
@@ -322,8 +339,23 @@
 </main>
 
 <script>
+window.KORREST_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBvGemTM_DzVgEqMTzqX2LlG0PLCiTb4hU",
+  authDomain: "mirra-digital-book.firebaseapp.com",
+  projectId: "mirra-digital-book",
+  storageBucket: "mirra-digital-book.firebasestorage.app",
+  messagingSenderId: "216497446585",
+  appId: "1:216497446585:web:7ca599f6ec530368418568"
+};
+window.KORREST_FIRESTORE_DOC_PATH = "mirra/korrestAdmin";
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
 const STORAGE_KEY = 'korrest_owner_console_v1';
 const STATUS_LABELS = { active: 'работает', setup: 'подключение', paused: 'пауза' };
+const CLOUD_DOC_PATH = window.KORREST_FIRESTORE_DOC_PATH || 'mirra/korrestAdmin';
 let state = {
   setupComplete: false,
   ownerName: '',
@@ -332,6 +364,10 @@ let state = {
   clients: [],
   activity: []
 };
+let cloudReady = false;
+let cloudDocRef = null;
+let cloudSaveTimer = null;
+let applyingCloudState = false;
 
 function uid(prefix = 'kr') {
   return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
@@ -352,6 +388,90 @@ function load() {
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  scheduleCloudSave();
+}
+
+function setCloudStatus(text, mode = '') {
+  ['loginCloudStatus', 'appCloudStatus'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('online', mode === 'online');
+    el.classList.toggle('offline', mode === 'offline');
+  });
+}
+
+function cloudPayload() {
+  return {
+    state,
+    updatedAt: new Date().toISOString(),
+    app: 'KorRest_Admin'
+  };
+}
+
+function applyCloudState(data) {
+  const nextState = data?.state || data;
+  if (!nextState || typeof nextState !== 'object') return;
+  applyingCloudState = true;
+  try {
+    state = { ...state, ...nextState };
+    if (!Array.isArray(state.clients)) state.clients = [];
+    if (!Array.isArray(state.activity)) state.activity = [];
+    ensureMirraConnected(true);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    document.getElementById('setupFields').style.display = state.setupComplete ? 'none' : 'block';
+    if (!document.getElementById('app').classList.contains('hidden')) render();
+  } finally {
+    applyingCloudState = false;
+  }
+}
+
+function hasFirebaseConfig() {
+  const cfg = window.KORREST_FIREBASE_CONFIG || {};
+  return Boolean(cfg.apiKey && cfg.projectId && cfg.appId);
+}
+
+async function initCloud() {
+  if (!hasFirebaseConfig() || !window.firebase) {
+    setCloudStatus('облако: недоступно', 'offline');
+    return false;
+  }
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(window.KORREST_FIREBASE_CONFIG);
+    if (firebase.auth) await firebase.auth().signInAnonymously();
+    const db = firebase.firestore();
+    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    cloudDocRef = db.doc(CLOUD_DOC_PATH);
+    const snap = await cloudDocRef.get();
+    if (snap.exists) {
+      applyCloudState(snap.data());
+    } else if (state.setupComplete || state.clients.length) {
+      await cloudDocRef.set(cloudPayload(), { merge: true });
+    }
+    cloudDocRef.onSnapshot((liveSnap) => {
+      if (liveSnap.exists) applyCloudState(liveSnap.data());
+    });
+    cloudReady = true;
+    setCloudStatus('облако: синхронизировано', 'online');
+    return true;
+  } catch (error) {
+    console.warn('KorRest cloud sync unavailable', error);
+    setCloudStatus('облако: офлайн', 'offline');
+    return false;
+  }
+}
+
+function scheduleCloudSave() {
+  if (!cloudReady || !cloudDocRef || applyingCloudState) return;
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(() => {
+    cloudDocRef.set(cloudPayload(), { merge: true })
+      .then(() => setCloudStatus('облако: синхронизировано', 'online'))
+      .catch((error) => {
+        console.warn('KorRest cloud save failed', error);
+        setCloudStatus('облако: ошибка сохранения', 'offline');
+      });
+  }, 250);
 }
 
 function escapeHtml(value) {
@@ -463,6 +583,7 @@ function init() {
   document.getElementById('pin').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') login();
   });
+  initCloud();
 }
 
 function login() {
