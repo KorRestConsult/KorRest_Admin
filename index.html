@@ -185,11 +185,66 @@
     color: var(--muted);
     font-size: 13px;
   }
+  .site-control {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fbfaf7;
+    padding: 12px;
+    margin-top: 4px;
+  }
+  .site-control-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+  .site-control-title {
+    font-family: var(--display);
+    font-size: 1.45rem;
+    line-height: 1;
+  }
+  .site-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .site-cell {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 10px;
+    min-width: 0;
+  }
+  .site-cell strong {
+    display: block;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 7px;
+  }
+  .module-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 9px;
+    font-size: 12px;
+  }
+  .module-toggle input { width: 16px; height: 16px; }
   .hidden { display: none !important; }
   @media (max-width: 860px) {
     .topbar, .panel-head { flex-direction: column; }
     .actions { justify-content: flex-start; }
-    .stats, .grid, .two { grid-template-columns: 1fr; }
+    .stats, .grid, .two, .site-grid, .module-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -321,12 +376,15 @@ function demoClients() {
       plan: 'Premium',
       projectUrl: 'https://korrestconsult.github.io/Mirra_test/',
       repoUrl: 'https://github.com/KorRestConsult/Mirra_test',
+      branch: 'main',
+      deployStatus: 'GitHub Pages подключен',
       dataUrl: '',
       launchedAt: '2026-06-01',
       lastCheckAt: today(),
       health: 94,
       users: 28,
       visits: 846,
+      modules: { content: true, staff: true, tests: true, analytics: true, finance: true, ai: true },
       notes: 'Первый подключенный проект. Обучение, база знаний, сотрудники, тесты.'
     },
     {
@@ -338,12 +396,15 @@ function demoClients() {
       plan: 'Start',
       projectUrl: '',
       repoUrl: '',
+      branch: 'main',
+      deployStatus: 'не подключен',
       dataUrl: '',
       launchedAt: '',
       lastCheckAt: '',
       health: 42,
       users: 0,
       visits: 0,
+      modules: { content: true, staff: false, tests: false, analytics: false, finance: false, ai: false },
       notes: 'Подготовить структуру, собрать материалы, выдать ссылку на тест.'
     },
     {
@@ -355,12 +416,15 @@ function demoClients() {
       plan: 'Support',
       projectUrl: '',
       repoUrl: '',
+      branch: 'main',
+      deployStatus: 'пауза',
       dataUrl: '',
       launchedAt: '',
       lastCheckAt: '',
       health: 12,
       users: 0,
       visits: 0,
+      modules: { content: true, staff: false, tests: false, analytics: false, finance: false, ai: false },
       notes: 'Ожидает подтверждения запуска.'
     }
   ];
@@ -376,12 +440,15 @@ function mirraClient() {
     plan: 'Premium',
     projectUrl: 'https://korrestconsult.github.io/Mirra_test/',
     repoUrl: 'https://github.com/KorRestConsult/Mirra_test',
+    branch: 'main',
+    deployStatus: 'GitHub Pages подключен',
     dataUrl: '',
     launchedAt: '2026-06-01',
     lastCheckAt: today(),
     health: 96,
     users: 28,
     visits: 846,
+    modules: { content: true, staff: true, tests: true, analytics: true, finance: true, ai: true },
     notes: 'Подключено к KorRest как первое заведение. MIRRA остается отдельным клиентским проектом, а здесь хранится только карточка управления подключением.'
   };
 }
@@ -464,12 +531,15 @@ function newClient() {
     plan: 'Start',
     projectUrl: '',
     repoUrl: '',
+    branch: 'main',
+    deployStatus: 'не подключен',
     dataUrl: '',
     launchedAt: '',
     lastCheckAt: '',
     health: 25,
     users: 0,
     visits: 0,
+    modules: { content: true, staff: false, tests: false, analytics: false, finance: false, ai: false },
     notes: ''
   };
   state.clients.unshift(client);
@@ -509,20 +579,42 @@ function saveClient(id) {
   client.plan = readField('plan') || 'Start';
   client.projectUrl = readField('projectUrl');
   client.repoUrl = readField('repoUrl');
+  client.branch = readField('branch') || 'main';
+  client.deployStatus = readField('deployStatus') || 'не подключен';
   client.dataUrl = readField('dataUrl');
   client.launchedAt = readField('launchedAt');
   client.lastCheckAt = readField('lastCheckAt') || today();
   client.health = Math.max(0, Math.min(100, Number(readField('health')) || 0));
   client.users = Math.max(0, Number(readField('users')) || 0);
   client.visits = Math.max(0, Number(readField('visits')) || 0);
+  client.modules = readModules();
   client.notes = readField('notes');
   log('Обновлена карточка клиента: ' + client.name + '.');
   save();
   render();
 }
 
+function readModules() {
+  const modules = {};
+  document.querySelectorAll('[data-module-key]').forEach((input) => {
+    modules[input.dataset.moduleKey] = input.checked;
+  });
+  return modules;
+}
+
 function openClient(url) {
   if (url) window.open(url, '_blank', 'noopener');
+}
+
+function syncClientSite(id) {
+  const client = state.clients.find((item) => item.id === id);
+  if (!client) return;
+  client.lastCheckAt = today();
+  client.deployStatus = client.repoUrl ? 'GitHub Pages подключен' : 'репозиторий не указан';
+  client.health = client.repoUrl && client.projectUrl ? Math.max(Number(client.health) || 0, 96) : Number(client.health) || 0;
+  log('Проверено подключение сайта: ' + client.name + '.');
+  save();
+  render();
 }
 
 function statsHtml() {
@@ -609,6 +701,16 @@ function editorHtml(client) {
         <label for="client-repoUrl">GitHub репозиторий</label>
         <input id="client-repoUrl" class="input" type="url" value="${escapeHtml(client.repoUrl)}" placeholder="https://github.com/...">
       </div>
+      <div class="two">
+        <div class="field">
+          <label for="client-branch">Ветка публикации</label>
+          <input id="client-branch" class="input" value="${escapeHtml(client.branch || 'main')}">
+        </div>
+        <div class="field">
+          <label for="client-deployStatus">Статус сайта</label>
+          <input id="client-deployStatus" class="input" value="${escapeHtml(client.deployStatus || 'не подключен')}">
+        </div>
+      </div>
       <div class="field">
         <label for="client-dataUrl">Источник данных / таблица</label>
         <input id="client-dataUrl" class="input" type="url" value="${escapeHtml(client.dataUrl)}" placeholder="https://docs.google.com/...">
@@ -649,6 +751,7 @@ function editorHtml(client) {
         <button class="btn" type="button" onclick="openClient('${escapeHtml(client.repoUrl)}')">Открыть GitHub</button>
         <button class="btn warn" type="button" onclick="deleteClient('${client.id}')">Удалить</button>
       </div>
+      ${siteControlHtml(client)}
       <div class="activity">
         <div class="muted">Последние действия</div>
         ${state.activity.slice(0, 6).map((item) => `
@@ -657,6 +760,58 @@ function editorHtml(client) {
             <span>${new Date(item.at).toLocaleDateString('ru-RU')}</span>
           </div>
         `).join('') || '<div class="empty">Пока нет действий.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function siteControlHtml(client) {
+  const modules = { content: true, staff: false, tests: false, analytics: false, finance: false, ai: false, ...(client.modules || {}) };
+  const moduleLabels = {
+    content: 'Контент и меню',
+    staff: 'Сотрудники',
+    tests: 'Тесты и обучение',
+    analytics: 'Аналитика сайта',
+    finance: 'Финансы / таблицы',
+    ai: 'AI-помощник'
+  };
+  return `
+    <div class="site-control">
+      <div class="site-control-head">
+        <div>
+          <div class="site-control-title">Управление сайтом</div>
+          <div class="muted">Подключение проекта клиента к KorRest.</div>
+        </div>
+        <button class="btn" type="button" onclick="syncClientSite('${client.id}')">Проверить</button>
+      </div>
+      <div class="site-grid">
+        <div class="site-cell">
+          <div class="stat-label">Сайт</div>
+          <strong>${escapeHtml(client.projectUrl || 'не указан')}</strong>
+        </div>
+        <div class="site-cell">
+          <div class="stat-label">Репозиторий</div>
+          <strong>${escapeHtml(client.repoUrl || 'не указан')}</strong>
+        </div>
+        <div class="site-cell">
+          <div class="stat-label">Ветка</div>
+          <strong>${escapeHtml(client.branch || 'main')}</strong>
+        </div>
+        <div class="site-cell">
+          <div class="stat-label">Статус</div>
+          <strong>${escapeHtml(client.deployStatus || 'не подключен')}</strong>
+        </div>
+      </div>
+      <div class="field">
+        <label>Модули управления</label>
+        <div class="module-grid">
+          ${Object.entries(moduleLabels).map(([key, label]) => `
+            <label class="module-toggle">
+              <input type="checkbox" data-module-key="${key}" ${modules[key] ? 'checked' : ''}>
+              <span>${label}</span>
+            </label>
+          `).join('')}
+        </div>
       </div>
     </div>
   `;
