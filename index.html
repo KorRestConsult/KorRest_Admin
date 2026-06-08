@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f6f5f1">
+<title>KorRest — кабинет управления клиентами</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f6f5f1;
+    --panel: #ffffff;
+    --ink: #15130f;
+    --soft: #5d5349;
+    --muted: #7a7168;
+    --line: rgba(21, 19, 15, 0.11);
+    --line-strong: rgba(21, 19, 15, 0.2);
+    --green: #3f7b52;
+    --gold: #b8892a;
+    --red: #9d2f2f;
+    --violet: #5b3fa0;
+    --shadow: 0 1px 4px rgba(26, 20, 16, 0.05), 0 12px 34px rgba(26, 20, 16, 0.05);
+    --font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --display: Georgia, "Times New Roman", serif;
+  }
+  html { background: var(--bg); color: var(--ink); font-family: var(--font); -webkit-text-size-adjust: 100%; }
+  body { min-height: 100vh; background: var(--bg); color: var(--ink); line-height: 1.55; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  .app { min-height: 100vh; padding: 20px 16px 34px; }
+  .shell { width: min(1180px, 100%); margin: 0 auto; }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+  .brand-mark {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: var(--ink);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--display);
+    font-size: 31px;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+  .eyebrow {
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(3rem, 9vw, 5.4rem);
+    font-weight: 400;
+    line-height: 0.86;
+    letter-spacing: 0;
+  }
+  .subtitle { max-width: 670px; margin-top: 10px; color: var(--soft); font-size: 13px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .btn {
+    min-height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--ink);
+    padding: 0 13px;
+    font-size: 12px;
+    box-shadow: 0 1px 4px rgba(26, 20, 16, 0.04);
+  }
+  .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .btn.warn { color: var(--red); }
+  .btn:active { transform: translateY(1px); }
+  .login {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .login-card, .panel, .stat, .client-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+  }
+  .login-card { width: min(430px, 100%); padding: 22px; }
+  .login-card h1 { font-size: 3.25rem; margin-bottom: 8px; }
+  .form { display: grid; gap: 9px; }
+  .field label {
+    display: block;
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .input, .select, .textarea {
+    width: 100%;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ink);
+    min-height: 42px;
+    padding: 10px;
+    font-size: 13px;
+  }
+  .textarea { min-height: 86px; resize: vertical; }
+  .error { min-height: 18px; color: var(--red); font-size: 12px; }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .stat { padding: 12px; box-shadow: none; }
+  .stat-label {
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .stat-value { font-family: var(--display); font-size: 2rem; line-height: 1; }
+  .muted { color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr); gap: 12px; align-items: start; }
+  .panel { padding: 14px; }
+  .panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .h2 { font-family: var(--display); font-size: 1.85rem; line-height: 1; }
+  .list { display: grid; gap: 8px; }
+  .client-card {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    padding: 12px;
+    border-left: 4px solid var(--gold);
+    box-shadow: none;
+    text-align: left;
+  }
+  .client-card.active { outline: 2px solid rgba(21, 19, 15, 0.11); }
+  .client-card[data-status="active"] { border-left-color: var(--green); }
+  .client-card[data-status="setup"] { border-left-color: var(--gold); }
+  .client-card[data-status="paused"] { border-left-color: var(--red); }
+  .client-name { font-family: var(--display); font-size: 1.45rem; line-height: 1.05; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tag {
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--soft);
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 10px;
+    line-height: 1;
+  }
+  .health { font-family: var(--display); font-size: 1.7rem; line-height: 1; text-align: right; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .activity { display: grid; gap: 8px; margin-top: 12px; }
+  .activity-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 8px;
+    font-size: 12px;
+  }
+  .empty {
+    border: 1px dashed var(--line-strong);
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .hidden { display: none !important; }
+  @media (max-width: 860px) {
+    .topbar, .panel-head { flex-direction: column; }
+    .actions { justify-content: flex-start; }
+    .stats, .grid, .two { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main id="login" class="login">
+  <section class="login-card">
+    <div class="brand-mark">K</div>
+    <div class="eyebrow">owner console</div>
+    <h1>KorRest</h1>
+    <p class="subtitle">Личный кабинет для управления клиентами, подключенными заведениями и запуском новых проектов.</p>
+    <div class="form" style="margin-top:16px">
+      <div id="setupFields">
+        <div class="field">
+          <label for="ownerName">Ваше имя</label>
+          <input id="ownerName" class="input" type="text" placeholder="Например, Константин">
+        </div>
+      </div>
+      <div class="field">
+        <label for="pin">PIN</label>
+        <input id="pin" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="4 цифры">
+      </div>
+      <div id="loginError" class="error"></div>
+      <button class="btn primary" type="button" onclick="login()">Войти</button>
+    </div>
+  </section>
+</main>
+
+<main id="app" class="app hidden">
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <div class="brand-mark">K</div>
+        <div class="eyebrow">частный кабинет</div>
+        <h1>KorRest</h1>
+        <p id="ownerSub" class="subtitle">Управление клиентами, подключениями и запуском новых заведений.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button" onclick="seedDemo()">Заполнить 3 заведения</button>
+        <button class="btn primary" type="button" onclick="newClient()">Новый клиент</button>
+        <button class="btn" type="button" onclick="lock()">Закрыть</button>
+      </div>
+    </header>
+
+    <section id="stats" class="stats"></section>
+
+    <section class="grid">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="h2">Клиенты</div>
+            <div class="muted">Заведения, которые подключены, запускаются или стоят на паузе.</div>
+          </div>
+          <select id="filter" class="select" style="max-width:210px" onchange="render()">
+            <option value="all">Все статусы</option>
+            <option value="active">Работают</option>
+            <option value="setup">Подключение</option>
+            <option value="paused">Пауза</option>
+          </select>
+        </div>
+        <div id="clientList" class="list"></div>
+      </div>
+
+      <aside class="panel">
+        <div class="panel-head">
+          <div>
+            <div id="editorTitle" class="h2">Карточка клиента</div>
+            <div class="muted">Статус, ссылки, тариф, контакт и заметки.</div>
+          </div>
+        </div>
+        <div id="editor"></div>
+      </aside>
+    </section>
+  </div>
+</main>
+
+<script>
+const STORAGE_KEY = 'korrest_owner_console_v1';
+const STATUS_LABELS = { active: 'работает', setup: 'подключение', paused: 'пауза' };
+let state = {
+  setupComplete: false,
+  ownerName: '',
+  pin: '',
+  selectedId: '',
+  clients: [],
+  activity: []
+};
+
+function uid(prefix = 'kr') {
+  return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state = { ...state, ...JSON.parse(raw) };
+  } catch (error) {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char]));
+}
+
+function log(text) {
+  state.activity.unshift({ id: uid('act'), text, at: new Date().toISOString() });
+  state.activity = state.activity.slice(0, 30);
+}
+
+function demoClients() {
+  return [
+    {
+      id: uid('client'),
+      name: 'MIRRA',
+      city: 'Рязань',
+      contact: 'Управляющий',
+      status: 'active',
+      plan: 'Premium',
+      projectUrl: 'https://korrestconsult.github.io/Mirra/',
+      dataUrl: '',
+      launchedAt: '2026-06-01',
+      lastCheckAt: today(),
+      health: 94,
+      users: 28,
+      visits: 846,
+      notes: 'Первый подключенный проект. Обучение, база знаний, сотрудники, тесты.'
+    },
+    {
+      id: uid('client'),
+      name: 'Клиент 2',
+      city: 'Москва',
+      contact: '',
+      status: 'setup',
+      plan: 'Start',
+      projectUrl: '',
+      dataUrl: '',
+      launchedAt: '',
+      lastCheckAt: '',
+      health: 42,
+      users: 0,
+      visits: 0,
+      notes: 'Подготовить структуру, собрать материалы, выдать ссылку на тест.'
+    },
+    {
+      id: uid('client'),
+      name: 'Клиент 3',
+      city: 'Санкт-Петербург',
+      contact: '',
+      status: 'paused',
+      plan: 'Support',
+      projectUrl: '',
+      dataUrl: '',
+      launchedAt: '',
+      lastCheckAt: '',
+      health: 12,
+      users: 0,
+      visits: 0,
+      notes: 'Ожидает подтверждения запуска.'
+    }
+  ];
+}
+
+function init() {
+  load();
+  document.getElementById('setupFields').style.display = state.setupComplete ? 'none' : 'block';
+  document.getElementById('pin').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') login();
+  });
+}
+
+function login() {
+  load();
+  const pin = document.getElementById('pin').value.trim();
+  const ownerName = document.getElementById('ownerName').value.trim() || 'Владелец';
+  const error = document.getElementById('loginError');
+  if (!/^\d{4}$/.test(pin)) {
+    error.textContent = 'PIN должен состоять из 4 цифр.';
+    return;
+  }
+  if (!state.setupComplete) {
+    state.setupComplete = true;
+    state.ownerName = ownerName;
+    state.pin = pin;
+    if (!state.clients.length) {
+      state.clients = demoClients();
+      state.selectedId = state.clients[0].id;
+      log('Создан кабинет KorRest и добавлены первые 3 заведения.');
+    }
+    save();
+  } else if (pin !== state.pin) {
+    error.textContent = 'Неверный PIN.';
+    return;
+  }
+  error.textContent = '';
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  render();
+}
+
+function lock() {
+  document.getElementById('pin').value = '';
+  document.getElementById('login').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+}
+
+function seedDemo() {
+  if (state.clients.length && !confirm('Заменить текущий список демо-набором из 3 заведений?')) return;
+  state.clients = demoClients();
+  state.selectedId = state.clients[0].id;
+  log('Обновлен демо-набор из 3 заведений.');
+  save();
+  render();
+}
+
+function newClient() {
+  const client = {
+    id: uid('client'),
+    name: 'Новое заведение',
+    city: '',
+    contact: '',
+    status: 'setup',
+    plan: 'Start',
+    projectUrl: '',
+    dataUrl: '',
+    launchedAt: '',
+    lastCheckAt: '',
+    health: 25,
+    users: 0,
+    visits: 0,
+    notes: ''
+  };
+  state.clients.unshift(client);
+  state.selectedId = client.id;
+  log('Добавлен новый клиент.');
+  save();
+  render();
+}
+
+function selectClient(id) {
+  state.selectedId = id;
+  save();
+  render();
+}
+
+function deleteClient(id) {
+  const client = state.clients.find((item) => item.id === id);
+  if (!client || !confirm('Удалить клиента "' + client.name + '" из KorRest?')) return;
+  state.clients = state.clients.filter((item) => item.id !== id);
+  state.selectedId = state.clients[0]?.id || '';
+  log('Удален клиент: ' + client.name + '.');
+  save();
+  render();
+}
+
+function readField(name) {
+  return document.getElementById('client-' + name)?.value.trim() || '';
+}
+
+function saveClient(id) {
+  const client = state.clients.find((item) => item.id === id);
+  if (!client) return;
+  client.name = readField('name') || 'Без названия';
+  client.city = readField('city');
+  client.contact = readField('contact');
+  client.status = readField('status') || 'setup';
+  client.plan = readField('plan') || 'Start';
+  client.projectUrl = readField('projectUrl');
+  client.dataUrl = readField('dataUrl');
+  client.launchedAt = readField('launchedAt');
+  client.lastCheckAt = readField('lastCheckAt') || today();
+  client.health = Math.max(0, Math.min(100, Number(readField('health')) || 0));
+  client.users = Math.max(0, Number(readField('users')) || 0);
+  client.visits = Math.max(0, Number(readField('visits')) || 0);
+  client.notes = readField('notes');
+  log('Обновлена карточка клиента: ' + client.name + '.');
+  save();
+  render();
+}
+
+function openClient(url) {
+  if (url) window.open(url, '_blank', 'noopener');
+}
+
+function statsHtml() {
+  const total = state.clients.length;
+  const active = state.clients.filter((client) => client.status === 'active').length;
+  const setup = state.clients.filter((client) => client.status === 'setup').length;
+  const users = state.clients.reduce((sum, client) => sum + (Number(client.users) || 0), 0);
+  const visits = state.clients.reduce((sum, client) => sum + (Number(client.visits) || 0), 0);
+  const avgHealth = total ? Math.round(state.clients.reduce((sum, client) => sum + (Number(client.health) || 0), 0) / total) : 0;
+  return [
+    ['Клиентов', total, active + ' работают'],
+    ['В подключении', setup, 'ожидают запуска'],
+    ['Пользователей', users, visits + ' просмотров'],
+    ['Здоровье сети', avgHealth + '%', 'средний статус']
+  ].map(([label, value, sub]) => `
+    <div class="stat">
+      <div class="stat-label">${label}</div>
+      <div class="stat-value">${value}</div>
+      <div class="muted">${sub}</div>
+    </div>
+  `).join('');
+}
+
+function listHtml() {
+  const filter = document.getElementById('filter').value || 'all';
+  const clients = state.clients.filter((client) => filter === 'all' || client.status === filter);
+  if (!clients.length) return '<div class="empty">Клиентов с таким статусом пока нет.</div>';
+  return clients.map((client) => `
+    <button class="client-card ${client.id === state.selectedId ? 'active' : ''}" data-status="${escapeHtml(client.status)}" type="button" onclick="selectClient('${client.id}')">
+      <span>
+        <span class="client-name">${escapeHtml(client.name)}</span>
+        <span class="muted" style="display:block">${escapeHtml(client.city || 'город не указан')} · ${escapeHtml(client.contact || 'контакт не указан')}</span>
+        <span class="tags">
+          <span class="tag">${escapeHtml(STATUS_LABELS[client.status] || client.status)}</span>
+          <span class="tag">${escapeHtml(client.plan || 'без тарифа')}</span>
+          <span class="tag">${client.users || 0} пользователей</span>
+          <span class="tag">${client.visits || 0} просмотров</span>
+        </span>
+      </span>
+      <span>
+        <span class="health">${Number(client.health) || 0}%</span>
+        <span class="muted" style="display:block;text-align:right">${escapeHtml(client.lastCheckAt || 'нет проверки')}</span>
+      </span>
+    </button>
+  `).join('');
+}
+
+function editorHtml(client) {
+  if (!client) return '<div class="empty">Выберите клиента или добавьте новое заведение.</div>';
+  return `
+    <div class="form">
+      <div class="field">
+        <label for="client-name">Название</label>
+        <input id="client-name" class="input" value="${escapeHtml(client.name)}">
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="client-city">Город</label>
+          <input id="client-city" class="input" value="${escapeHtml(client.city)}">
+        </div>
+        <div class="field">
+          <label for="client-contact">Контакт</label>
+          <input id="client-contact" class="input" value="${escapeHtml(client.contact)}">
+        </div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="client-status">Статус</label>
+          <select id="client-status" class="select">
+            ${Object.entries(STATUS_LABELS).map(([value, label]) => `<option value="${value}" ${client.status === value ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label for="client-plan">Тариф</label>
+          <input id="client-plan" class="input" value="${escapeHtml(client.plan)}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="client-projectUrl">Ссылка проекта</label>
+        <input id="client-projectUrl" class="input" type="url" value="${escapeHtml(client.projectUrl)}" placeholder="https://...">
+      </div>
+      <div class="field">
+        <label for="client-dataUrl">Источник данных / таблица</label>
+        <input id="client-dataUrl" class="input" type="url" value="${escapeHtml(client.dataUrl)}" placeholder="https://docs.google.com/...">
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="client-launchedAt">Дата запуска</label>
+          <input id="client-launchedAt" class="input" type="date" value="${escapeHtml(client.launchedAt)}">
+        </div>
+        <div class="field">
+          <label for="client-lastCheckAt">Последняя проверка</label>
+          <input id="client-lastCheckAt" class="input" type="date" value="${escapeHtml(client.lastCheckAt)}">
+        </div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="client-health">Здоровье, %</label>
+          <input id="client-health" class="input" type="number" min="0" max="100" value="${Number(client.health) || 0}">
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="client-users">Люди</label>
+            <input id="client-users" class="input" type="number" min="0" value="${Number(client.users) || 0}">
+          </div>
+          <div class="field">
+            <label for="client-visits">Просмотры</label>
+            <input id="client-visits" class="input" type="number" min="0" value="${Number(client.visits) || 0}">
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="client-notes">Заметки</label>
+        <textarea id="client-notes" class="textarea">${escapeHtml(client.notes)}</textarea>
+      </div>
+      <div class="actions" style="justify-content:flex-start">
+        <button class="btn primary" type="button" onclick="saveClient('${client.id}')">Сохранить</button>
+        <button class="btn" type="button" onclick="openClient('${escapeHtml(client.projectUrl)}')">Открыть проект</button>
+        <button class="btn warn" type="button" onclick="deleteClient('${client.id}')">Удалить</button>
+      </div>
+      <div class="activity">
+        <div class="muted">Последние действия</div>
+        ${state.activity.slice(0, 6).map((item) => `
+          <div class="activity-row">
+            <span>${escapeHtml(item.text)}</span>
+            <span>${new Date(item.at).toLocaleDateString('ru-RU')}</span>
+          </div>
+        `).join('') || '<div class="empty">Пока нет действий.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function render() {
+  document.getElementById('ownerSub').textContent = (state.ownerName || 'Владелец') + ', здесь ваши клиенты, подключения и общий контроль проектов.';
+  document.getElementById('stats').innerHTML = statsHtml();
+  document.getElementById('clientList').innerHTML = listHtml();
+  const selected = state.clients.find((client) => client.id === state.selectedId) || state.clients[0];
+  if (selected) state.selectedId = selected.id;
+  document.getElementById('editorTitle').textContent = selected ? selected.name : 'Карточка клиента';
+  document.getElementById('editor').innerHTML = editorHtml(selected);
+  save();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
