@@ -455,6 +455,10 @@ function mirraClient() {
 
 function init() {
   load();
+  if (state.setupComplete) {
+    ensureMirraConnected(true);
+    save();
+  }
   document.getElementById('setupFields').style.display = state.setupComplete ? 'none' : 'block';
   document.getElementById('pin').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') login();
@@ -496,18 +500,34 @@ function lock() {
   document.getElementById('app').classList.add('hidden');
 }
 
-function connectMirra() {
+function ensureMirraConnected(silent = false) {
   const existing = state.clients.find((client) => client.name.trim().toLowerCase() === 'mirra');
   const mirra = mirraClient();
   if (existing) {
-    Object.assign(existing, { ...mirra, id: existing.id });
+    Object.assign(existing, {
+      projectUrl: existing.projectUrl || mirra.projectUrl,
+      repoUrl: existing.repoUrl || mirra.repoUrl,
+      branch: existing.branch || mirra.branch,
+      deployStatus: existing.deployStatus || mirra.deployStatus,
+      modules: { ...mirra.modules, ...(existing.modules || {}) },
+      contact: existing.contact || mirra.contact,
+      city: existing.city || mirra.city,
+      status: existing.status || mirra.status,
+      plan: existing.plan || mirra.plan,
+      notes: existing.notes || mirra.notes
+    });
     state.selectedId = existing.id;
-    log('Обновлено подключение MIRRA.');
-  } else {
-    state.clients.unshift(mirra);
-    state.selectedId = mirra.id;
-    log('MIRRA подключена к кабинету KorRest.');
+    if (!silent) log('Обновлено подключение MIRRA.');
+    return existing;
   }
+  state.clients.unshift(mirra);
+  state.selectedId = mirra.id;
+  if (!silent) log('MIRRA подключена к кабинету KorRest.');
+  return mirra;
+}
+
+function connectMirra() {
+  ensureMirraConnected(false);
   save();
   render();
 }
