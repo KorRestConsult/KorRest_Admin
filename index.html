@@ -146,7 +146,7 @@
   }
   .stat-value { font-family: var(--display); font-size: 2rem; line-height: 1; }
   .muted { color: var(--muted); font-size: 12px; line-height: 1.45; }
-  .grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr); gap: 12px; align-items: start; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
   .panel { padding: 14px; }
   .panel.is-focused { animation: focus-panel 0.75s ease; }
   @keyframes focus-panel {
@@ -162,6 +162,11 @@
     margin-bottom: 12px;
   }
   .h2 { font-family: var(--display); font-size: 1.85rem; line-height: 1; }
+  .project-title {
+    font-family: var(--display);
+    font-size: clamp(2.4rem, 7vw, 4.4rem);
+    line-height: 0.92;
+  }
   .list { display: grid; gap: 8px; }
   .client-card {
     display: grid;
@@ -310,6 +315,32 @@
     padding: 10px;
   }
   .mini-value { font-family: var(--display); font-size: 1.6rem; line-height: 1; }
+  .project-hero {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 14px;
+    align-items: start;
+    margin-bottom: 12px;
+  }
+  .live-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(63, 123, 82, 0.24);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--green);
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  .live-dot.offline { color: var(--red); border-color: rgba(157, 47, 47, 0.24); }
+  .project-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+  }
   .toast {
     position: fixed;
     left: 50%;
@@ -332,7 +363,7 @@
   @media (max-width: 860px) {
     .topbar, .panel-head { flex-direction: column; }
     .actions { justify-content: flex-start; }
-    .stats, .grid, .two, .site-grid, .module-grid, .mini-grid { grid-template-columns: 1fr; }
+    .stats, .grid, .two, .site-grid, .module-grid, .mini-grid, .project-hero, .project-columns { grid-template-columns: 1fr; }
     .ops-row { grid-template-columns: 1fr; }
   }
 </style>
@@ -382,7 +413,7 @@
 
     <section id="stats" class="stats"></section>
 
-    <section class="grid">
+    <section class="grid" id="dashboardView">
       <div class="panel">
         <div class="panel-head">
           <div>
@@ -398,17 +429,8 @@
         </div>
         <div id="clientList" class="list"></div>
       </div>
-
-      <aside class="panel" id="editorPanel">
-        <div class="panel-head">
-          <div>
-            <div id="editorTitle" class="h2">Карточка клиента</div>
-            <div class="muted">Статус, ссылки, тариф, контакт и заметки.</div>
-          </div>
-        </div>
-        <div id="editor"></div>
-      </aside>
     </section>
+    <section id="projectView" class="hidden"></section>
   </div>
 </main>
 <div id="toast" class="toast"></div>
@@ -440,6 +462,7 @@ let state = {
   activity: []
 };
 let activeOpsTab = 'team';
+let currentView = 'dashboard';
 let cloudReady = false;
 let cloudDocRef = null;
 let cloudSaveTimer = null;
@@ -741,6 +764,7 @@ function login() {
 }
 
 function lock() {
+  currentView = 'dashboard';
   document.getElementById('pin').value = '';
   document.getElementById('login').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
@@ -817,23 +841,16 @@ function newClient() {
 }
 
 function selectClient(id) {
-  const client = state.clients.find((item) => item.id === id);
   state.selectedId = id;
+  currentView = 'project';
   save();
   render();
-  focusEditorPanel(client ? client.name : 'Клиент');
+  refreshProjectLive(id);
 }
 
-function focusEditorPanel(name) {
-  const panel = document.getElementById('editorPanel');
-  if (!panel) return;
-  panel.classList.remove('is-focused');
-  void panel.offsetWidth;
-  panel.classList.add('is-focused');
-  if (window.matchMedia('(max-width: 860px)').matches) {
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-  showToast('Открыто управление: ' + name);
+function backToDashboard() {
+  currentView = 'dashboard';
+  render();
 }
 
 function showToast(text) {
@@ -896,15 +913,111 @@ function openClient(url) {
   if (url) window.open(url, '_blank', 'noopener');
 }
 
+async function refreshProjectLive(clientId) {
+  const client = state.clients.find((item) => item.id === clientId);
+  if (!client) return;
+  client.live = { ...(client.live || {}), loading: true, error: '' };
+  render();
+  try {
+    const [site, mirraState] = await Promise.all([
+      fetchProjectSite(client),
+      fetchMirraProjectState(client)
+    ]);
+    client.live = {
+      loading: false,
+      fetchedAt: new Date().toISOString(),
+      site,
+      mirraState,
+      error: ''
+    };
+    if (mirraState?.employees?.length) {
+      client.ops.staff = mirraState.employees.map((emp) => ({
+        id: emp.id || uid('emp'),
+        name: emp.name || 'Сотрудник',
+        role: emp.position || emp.role || 'Сотрудник',
+        venue: client.name,
+        status: emp.status || 'работает',
+        progress: Number(emp.rating || emp.progress || 0),
+        tests: Number(mirraState.trainingResults?.filter((item) => item.employeeId === emp.id).length || 0),
+        average: Number(emp.rating || 0),
+        weak: emp.knowledgeLevel || 'не определено'
+      }));
+      client.users = client.ops.staff.length;
+    }
+    if (site?.menuItems?.length) {
+      client.ops.menu = site.menuItems.slice(0, 80).map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        price: item.price,
+        status: 'активно',
+        updatedAt: today(),
+        training: true
+      }));
+    }
+    client.health = site?.status === 'online' ? 100 : client.health;
+    client.lastCheckAt = today();
+    log('Обновлены живые данные проекта: ' + client.name + '.');
+  } catch (error) {
+    client.live = { loading: false, fetchedAt: new Date().toISOString(), error: error.message || 'Не удалось загрузить проект' };
+  }
+  save();
+  render();
+}
+
+async function fetchProjectSite(client) {
+  if (!client.projectUrl) return { status: 'offline', error: 'Ссылка проекта не указана', menuItems: [] };
+  const response = await fetch(client.projectUrl, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Сайт вернул ' + response.status);
+  const html = await response.text();
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const cards = Array.from(doc.querySelectorAll('.cocktail-card'));
+  const pages = Array.from(doc.querySelectorAll('.page'));
+  const menuItems = cards.map((card, index) => ({
+    id: 'site_menu_' + index,
+    name: card.querySelector('.cocktail-name, .alco-name')?.textContent.trim() || card.querySelector('img')?.alt || 'Позиция',
+    price: Number((card.querySelector('.cocktail-price')?.textContent || '').replace(/\D/g, '')) || 0,
+    category: nearestPageTitle(card) || 'Меню'
+  })).filter((item) => item.name && item.name !== 'Позиция');
+  return {
+    status: 'online',
+    title: doc.title || client.name,
+    bytes: html.length,
+    pageCount: pages.length,
+    cardCount: cards.length,
+    imageCount: doc.querySelectorAll('img').length,
+    menuItems,
+    url: client.projectUrl
+  };
+}
+
+function nearestPageTitle(node) {
+  const page = node.closest('.page');
+  if (!page) return '';
+  return page.querySelector('.page-title')?.textContent.replace(/\s+/g, ' ').trim() || page.id || '';
+}
+
+async function fetchMirraProjectState(client) {
+  if (!/mirra/i.test(client.name) || !window.firebase || !hasFirebaseConfig()) return null;
+  if (!firebase.apps.length) firebase.initializeApp(window.KORREST_FIREBASE_CONFIG);
+  if (firebase.auth) await firebase.auth().signInAnonymously();
+  const snap = await firebase.firestore().doc('mirra/sharedState').get();
+  if (!snap.exists) return null;
+  const data = snap.data();
+  const source = data.state || data;
+  return {
+    employees: Array.isArray(source.employees) ? source.employees : [],
+    attestations: Array.isArray(source.attestations) ? source.attestations : [],
+    trainingResults: Array.isArray(source.trainingResults) ? source.trainingResults : [],
+    assignments: Array.isArray(source.assignments) ? source.assignments : [],
+    updatedAt: data.updatedAt || ''
+  };
+}
+
 function syncClientSite(id) {
   const client = state.clients.find((item) => item.id === id);
   if (!client) return;
-  client.lastCheckAt = today();
-  client.deployStatus = client.repoUrl ? 'GitHub Pages подключен' : 'репозиторий не указан';
-  client.health = client.repoUrl && client.projectUrl ? Math.max(Number(client.health) || 0, 96) : Number(client.health) || 0;
-  log('Проверено подключение сайта: ' + client.name + '.');
-  save();
-  render();
+  refreshProjectLive(id);
 }
 
 function setOpsTab(tab) {
@@ -1047,6 +1160,59 @@ function listHtml() {
       </span>
     </button>
   `).join('');
+}
+
+function projectViewHtml(client) {
+  if (!client) return '<div class="panel"><div class="empty">Проект не найден.</div></div>';
+  hydrateClientOps(client);
+  const live = client.live || {};
+  const site = live.site || {};
+  const mirra = live.mirraState || {};
+  const liveOk = site.status === 'online';
+  return `
+    <div class="panel">
+      <div class="project-hero">
+        <div>
+          <button class="btn" type="button" onclick="backToDashboard()">Назад к проектам</button>
+          <div class="eyebrow" style="margin-top:14px">подключенный проект</div>
+          <div class="project-title">${escapeHtml(client.name)}</div>
+          <p class="subtitle">${escapeHtml(client.city || 'город не указан')} · ${escapeHtml(client.status || '')} · данные ${live.fetchedAt ? 'обновлены ' + new Date(live.fetchedAt).toLocaleString('ru-RU') : 'еще не обновлялись'}</p>
+          <div class="live-dot ${liveOk ? '' : 'offline'}">${live.loading ? 'обновление...' : liveOk ? 'live: сайт MIRRA доступен' : 'live: требуется проверка'}</div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" onclick="refreshProjectLive('${client.id}')">Обновить live</button>
+          <button class="btn" type="button" onclick="openClient('${escapeHtml(client.projectUrl)}')">Открыть сайт</button>
+          <button class="btn" type="button" onclick="openClient('${escapeHtml(client.repoUrl)}')">GitHub</button>
+        </div>
+      </div>
+      ${live.error ? `<div class="empty" style="border-color:rgba(157,47,47,0.24);color:var(--red)">Ошибка live-загрузки: ${escapeHtml(live.error)}</div>` : ''}
+      <div class="mini-grid">
+        <div class="mini-card"><div class="stat-label">Страниц сайта</div><div class="mini-value">${site.pageCount || 0}</div></div>
+        <div class="mini-card"><div class="stat-label">Позиций меню</div><div class="mini-value">${site.cardCount || client.ops.menu.length || 0}</div></div>
+        <div class="mini-card"><div class="stat-label">Сотрудников Firestore</div><div class="mini-value">${mirra.employees?.length || client.ops.staff.length || 0}</div></div>
+      </div>
+    </div>
+    <div class="project-columns">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="h2">Живые данные MIRRA</div>
+            <div class="muted">Сайт читается из ${escapeHtml(client.projectUrl || '—')}; сотрудники и обучение — из Firestore `mirra/sharedState`.</div>
+          </div>
+        </div>
+        ${opsConsoleHtml(client)}
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="h2">Настройки проекта</div>
+            <div class="muted">Техническое подключение и права KorRest над проектом.</div>
+          </div>
+        </div>
+        ${editorHtml(client)}
+      </div>
+    </div>
+  `;
 }
 
 function editorHtml(client) {
@@ -1326,11 +1492,18 @@ function render() {
   hydrateAllClients();
   document.getElementById('ownerSub').textContent = (state.ownerName || 'Владелец') + ', здесь ваши клиенты, подключения и общий контроль проектов.';
   document.getElementById('stats').innerHTML = statsHtml();
-  document.getElementById('clientList').innerHTML = listHtml();
   const selected = state.clients.find((client) => client.id === state.selectedId) || state.clients[0];
   if (selected) state.selectedId = selected.id;
-  document.getElementById('editorTitle').textContent = selected ? selected.name : 'Карточка клиента';
-  document.getElementById('editor').innerHTML = editorHtml(selected);
+  const dashboardView = document.getElementById('dashboardView');
+  const projectView = document.getElementById('projectView');
+  document.getElementById('stats').classList.toggle('hidden', currentView !== 'dashboard');
+  dashboardView.classList.toggle('hidden', currentView !== 'dashboard');
+  projectView.classList.toggle('hidden', currentView !== 'project');
+  if (currentView === 'dashboard') {
+    document.getElementById('clientList').innerHTML = listHtml();
+  } else {
+    projectView.innerHTML = projectViewHtml(selected);
+  }
   save();
 }
 
