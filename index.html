@@ -227,6 +227,7 @@
         <p id="ownerSub" class="subtitle">Управление клиентами, подключениями и запуском новых заведений.</p>
       </div>
       <div class="actions">
+        <button class="btn" type="button" onclick="connectMirra()">Подключить MIRRA</button>
         <button class="btn" type="button" onclick="seedDemo()">Заполнить 3 заведения</button>
         <button class="btn primary" type="button" onclick="newClient()">Новый клиент</button>
         <button class="btn" type="button" onclick="lock()">Закрыть</button>
@@ -318,7 +319,8 @@ function demoClients() {
       contact: 'Управляющий',
       status: 'active',
       plan: 'Premium',
-      projectUrl: 'https://korrestconsult.github.io/Mirra/',
+      projectUrl: 'https://korrestconsult.github.io/Mirra_test/',
+      repoUrl: 'https://github.com/KorRestConsult/Mirra_test',
       dataUrl: '',
       launchedAt: '2026-06-01',
       lastCheckAt: today(),
@@ -335,6 +337,7 @@ function demoClients() {
       status: 'setup',
       plan: 'Start',
       projectUrl: '',
+      repoUrl: '',
       dataUrl: '',
       launchedAt: '',
       lastCheckAt: '',
@@ -351,6 +354,7 @@ function demoClients() {
       status: 'paused',
       plan: 'Support',
       projectUrl: '',
+      repoUrl: '',
       dataUrl: '',
       launchedAt: '',
       lastCheckAt: '',
@@ -360,6 +364,26 @@ function demoClients() {
       notes: 'Ожидает подтверждения запуска.'
     }
   ];
+}
+
+function mirraClient() {
+  return {
+    id: uid('client'),
+    name: 'MIRRA',
+    city: 'Рязань',
+    contact: 'KorRestConsult / управляющий MIRRA',
+    status: 'active',
+    plan: 'Premium',
+    projectUrl: 'https://korrestconsult.github.io/Mirra_test/',
+    repoUrl: 'https://github.com/KorRestConsult/Mirra_test',
+    dataUrl: '',
+    launchedAt: '2026-06-01',
+    lastCheckAt: today(),
+    health: 96,
+    users: 28,
+    visits: 846,
+    notes: 'Подключено к KorRest как первое заведение. MIRRA остается отдельным клиентским проектом, а здесь хранится только карточка управления подключением.'
+  };
 }
 
 function init() {
@@ -405,6 +429,22 @@ function lock() {
   document.getElementById('app').classList.add('hidden');
 }
 
+function connectMirra() {
+  const existing = state.clients.find((client) => client.name.trim().toLowerCase() === 'mirra');
+  const mirra = mirraClient();
+  if (existing) {
+    Object.assign(existing, { ...mirra, id: existing.id });
+    state.selectedId = existing.id;
+    log('Обновлено подключение MIRRA.');
+  } else {
+    state.clients.unshift(mirra);
+    state.selectedId = mirra.id;
+    log('MIRRA подключена к кабинету KorRest.');
+  }
+  save();
+  render();
+}
+
 function seedDemo() {
   if (state.clients.length && !confirm('Заменить текущий список демо-набором из 3 заведений?')) return;
   state.clients = demoClients();
@@ -423,6 +463,7 @@ function newClient() {
     status: 'setup',
     plan: 'Start',
     projectUrl: '',
+    repoUrl: '',
     dataUrl: '',
     launchedAt: '',
     lastCheckAt: '',
@@ -467,6 +508,7 @@ function saveClient(id) {
   client.status = readField('status') || 'setup';
   client.plan = readField('plan') || 'Start';
   client.projectUrl = readField('projectUrl');
+  client.repoUrl = readField('repoUrl');
   client.dataUrl = readField('dataUrl');
   client.launchedAt = readField('launchedAt');
   client.lastCheckAt = readField('lastCheckAt') || today();
@@ -516,6 +558,7 @@ function listHtml() {
         <span class="tags">
           <span class="tag">${escapeHtml(STATUS_LABELS[client.status] || client.status)}</span>
           <span class="tag">${escapeHtml(client.plan || 'без тарифа')}</span>
+          ${client.repoUrl ? '<span class="tag">GitHub</span>' : ''}
           <span class="tag">${client.users || 0} пользователей</span>
           <span class="tag">${client.visits || 0} просмотров</span>
         </span>
@@ -563,6 +606,10 @@ function editorHtml(client) {
         <input id="client-projectUrl" class="input" type="url" value="${escapeHtml(client.projectUrl)}" placeholder="https://...">
       </div>
       <div class="field">
+        <label for="client-repoUrl">GitHub репозиторий</label>
+        <input id="client-repoUrl" class="input" type="url" value="${escapeHtml(client.repoUrl)}" placeholder="https://github.com/...">
+      </div>
+      <div class="field">
         <label for="client-dataUrl">Источник данных / таблица</label>
         <input id="client-dataUrl" class="input" type="url" value="${escapeHtml(client.dataUrl)}" placeholder="https://docs.google.com/...">
       </div>
@@ -599,6 +646,7 @@ function editorHtml(client) {
       <div class="actions" style="justify-content:flex-start">
         <button class="btn primary" type="button" onclick="saveClient('${client.id}')">Сохранить</button>
         <button class="btn" type="button" onclick="openClient('${escapeHtml(client.projectUrl)}')">Открыть проект</button>
+        <button class="btn" type="button" onclick="openClient('${escapeHtml(client.repoUrl)}')">Открыть GitHub</button>
         <button class="btn warn" type="button" onclick="deleteClient('${client.id}')">Удалить</button>
       </div>
       <div class="activity">
