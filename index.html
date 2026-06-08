@@ -148,6 +148,12 @@
   .muted { color: var(--muted); font-size: 12px; line-height: 1.45; }
   .grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr); gap: 12px; align-items: start; }
   .panel { padding: 14px; }
+  .panel.is-focused { animation: focus-panel 0.75s ease; }
+  @keyframes focus-panel {
+    0% { box-shadow: 0 0 0 0 rgba(63, 123, 82, 0.34), var(--shadow); }
+    55% { box-shadow: 0 0 0 6px rgba(63, 123, 82, 0.12), var(--shadow); }
+    100% { box-shadow: var(--shadow); }
+  }
   .panel-head {
     display: flex;
     justify-content: space-between;
@@ -255,6 +261,24 @@
     font-size: 12px;
   }
   .module-toggle input { width: 16px; height: 16px; }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translate(-50%, 16px);
+    z-index: 20;
+    border: 1px solid rgba(63, 123, 82, 0.24);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--green);
+    padding: 10px 14px;
+    box-shadow: var(--shadow);
+    font-size: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .toast.active { opacity: 1; transform: translate(-50%, 0); }
   .hidden { display: none !important; }
   @media (max-width: 860px) {
     .topbar, .panel-head { flex-direction: column; }
@@ -325,7 +349,7 @@
         <div id="clientList" class="list"></div>
       </div>
 
-      <aside class="panel">
+      <aside class="panel" id="editorPanel">
         <div class="panel-head">
           <div>
             <div id="editorTitle" class="h2">Карточка клиента</div>
@@ -337,6 +361,7 @@
     </section>
   </div>
 </main>
+<div id="toast" class="toast"></div>
 
 <script>
 window.KORREST_FIREBASE_CONFIG = {
@@ -691,9 +716,32 @@ function newClient() {
 }
 
 function selectClient(id) {
+  const client = state.clients.find((item) => item.id === id);
   state.selectedId = id;
   save();
   render();
+  focusEditorPanel(client ? client.name : 'Клиент');
+}
+
+function focusEditorPanel(name) {
+  const panel = document.getElementById('editorPanel');
+  if (!panel) return;
+  panel.classList.remove('is-focused');
+  void panel.offsetWidth;
+  panel.classList.add('is-focused');
+  if (window.matchMedia('(max-width: 860px)').matches) {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  showToast('Открыто управление: ' + name);
+}
+
+function showToast(text) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = text;
+  toast.classList.add('active');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove('active'), 1700);
 }
 
 function deleteClient(id) {
@@ -808,6 +856,11 @@ function editorHtml(client) {
   if (!client) return '<div class="empty">Выберите клиента или добавьте новое заведение.</div>';
   return `
     <div class="form">
+      <div class="actions" style="justify-content:flex-start">
+        <button class="btn primary" type="button" onclick="openClient('${escapeHtml(client.projectUrl)}')">Открыть сайт</button>
+        <button class="btn" type="button" onclick="openClient('${escapeHtml(client.repoUrl)}')">GitHub</button>
+        <button class="btn" type="button" onclick="syncClientSite('${client.id}')">Проверить</button>
+      </div>
       <div class="field">
         <label for="client-name">Название</label>
         <input id="client-name" class="input" value="${escapeHtml(client.name)}">
