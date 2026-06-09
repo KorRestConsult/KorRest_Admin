@@ -389,6 +389,7 @@
       </div>
       <div id="loginError" class="error"></div>
       <button class="btn primary" type="button" onclick="login()">Войти</button>
+      <button class="btn" type="button" onclick="resetPin()">Сменить PIN</button>
     </div>
   </section>
 </main>
@@ -453,6 +454,8 @@ window.KORREST_FIRESTORE_DOC_PATH = "mirra/korrestAdmin";
 const STORAGE_KEY = 'korrest_owner_console_v1';
 const STATUS_LABELS = { active: 'работает', setup: 'подключение', paused: 'пауза' };
 const CLOUD_DOC_PATH = window.KORREST_FIRESTORE_DOC_PATH || 'mirra/korrestAdmin';
+const MIRRA_SITE_URL = 'https://korrestconsult.github.io/Mirra_test/';
+const MIRRA_DATA_URL = '../index.html';
 let state = {
   setupComplete: false,
   ownerName: '',
@@ -641,11 +644,11 @@ function demoClients() {
       contact: 'Управляющий',
       status: 'active',
       plan: 'Premium',
-      projectUrl: 'https://korrestconsult.github.io/Mirra_test/',
+      projectUrl: MIRRA_SITE_URL,
       repoUrl: 'https://github.com/KorRestConsult/Mirra_test',
       branch: 'main',
       deployStatus: 'GitHub Pages подключен',
-      dataUrl: '',
+      dataUrl: MIRRA_DATA_URL,
       launchedAt: '2026-06-01',
       lastCheckAt: today(),
       health: 94,
@@ -705,11 +708,11 @@ function mirraClient() {
     contact: 'KorRestConsult / управляющий MIRRA',
     status: 'active',
     plan: 'Premium',
-    projectUrl: 'https://korrestconsult.github.io/Mirra_test/',
+    projectUrl: MIRRA_SITE_URL,
     repoUrl: 'https://github.com/KorRestConsult/Mirra_test',
     branch: 'main',
     deployStatus: 'GitHub Pages подключен',
-    dataUrl: '',
+    dataUrl: MIRRA_DATA_URL,
     launchedAt: '2026-06-01',
     lastCheckAt: today(),
     health: 96,
@@ -763,6 +766,31 @@ function login() {
   render();
 }
 
+function resetPin() {
+  load();
+  const pin = document.getElementById('pin').value.trim();
+  const ownerName = document.getElementById('ownerName').value.trim();
+  const error = document.getElementById('loginError');
+  if (!/^\d{4}$/.test(pin)) {
+    error.textContent = 'Введите новый PIN из 4 цифр и нажмите «Сменить PIN».';
+    return;
+  }
+  if (!confirm('Сменить PIN кабинета на введенные 4 цифры? Клиенты и данные сохранятся.')) return;
+  state.setupComplete = true;
+  state.pin = pin;
+  state.ownerName = ownerName || state.ownerName || 'Владелец';
+  if (!state.clients.length) {
+    state.clients = demoClients();
+    state.selectedId = state.clients[0].id;
+  }
+  hydrateAllClients();
+  ensureMirraConnected(true);
+  log('PIN кабинета изменен.');
+  save();
+  error.textContent = 'PIN изменен. Нажмите «Войти».';
+  document.getElementById('setupFields').style.display = 'none';
+}
+
 function lock() {
   currentView = 'dashboard';
   document.getElementById('pin').value = '';
@@ -779,6 +807,7 @@ function ensureMirraConnected(silent = false) {
       repoUrl: existing.repoUrl || mirra.repoUrl,
       branch: existing.branch || mirra.branch,
       deployStatus: existing.deployStatus || mirra.deployStatus,
+      dataUrl: existing.dataUrl || mirra.dataUrl,
       modules: { ...mirra.modules, ...(existing.modules || {}) },
       contact: existing.contact || mirra.contact,
       city: existing.city || mirra.city,
@@ -966,9 +995,23 @@ async function refreshProjectLive(clientId) {
 }
 
 async function fetchProjectSite(client) {
-  if (!client.projectUrl) return { status: 'offline', error: 'Ссылка проекта не указана', menuItems: [] };
-  const response = await fetch(client.projectUrl, { cache: 'no-store' });
-  if (!response.ok) throw new Error('Сайт вернул ' + response.status);
+  const sources = [client.dataUrl, client.projectUrl].filter(Boolean);
+  if (!sources.length) return { status: 'offline', error: 'Источник проекта не указан', menuItems: [] };
+  let response = null;
+  let sourceUrl = '';
+  let lastError = null;
+  for (const url of sources) {
+    try {
+      response = await fetch(url, { cache: 'no-store' });
+      sourceUrl = url;
+      if (response.ok) break;
+      lastError = new Error(url + ' вернул ' + response.status);
+    } catch (error) {
+      lastError = error;
+      response = null;
+    }
+  }
+  if (!response || !response.ok) throw new Error(lastError?.message || 'Не удалось прочитать источник проекта');
   const html = await response.text();
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const cards = Array.from(doc.querySelectorAll('.cocktail-card'));
@@ -987,7 +1030,8 @@ async function fetchProjectSite(client) {
     cardCount: cards.length,
     imageCount: doc.querySelectorAll('img').length,
     menuItems,
-    url: client.projectUrl
+    url: sourceUrl,
+    publicUrl: client.projectUrl || sourceUrl
   };
 }
 
@@ -1197,7 +1241,7 @@ function projectViewHtml(client) {
         <div class="panel-head">
           <div>
             <div class="h2">Живые данные MIRRA</div>
-            <div class="muted">Сайт читается из ${escapeHtml(client.projectUrl || '—')}; сотрудники и обучение — из Firestore `mirra/sharedState`.</div>
+            <div class="muted">HTML читается из ${escapeHtml(client.dataUrl || client.projectUrl || '—')}; сайт открывается по ${escapeHtml(client.projectUrl || '—')}; сотрудники и обучение — из Firestore mirra/sharedState.</div>
           </div>
         </div>
         ${opsConsoleHtml(client)}
@@ -1269,8 +1313,8 @@ function editorHtml(client) {
         </div>
       </div>
       <div class="field">
-        <label for="client-dataUrl">Источник данных / таблица</label>
-        <input id="client-dataUrl" class="input" type="url" value="${escapeHtml(client.dataUrl)}" placeholder="https://docs.google.com/...">
+        <label for="client-dataUrl">Источник live-данных</label>
+        <input id="client-dataUrl" class="input" type="text" value="${escapeHtml(client.dataUrl)}" placeholder="../index.html или https://...">
       </div>
       <div class="two">
         <div class="field">
